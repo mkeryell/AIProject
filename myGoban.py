@@ -30,6 +30,7 @@
 from __future__ import print_function # Used to help cython work well
 import numpy as np
 import random
+import json
 
 def getProperRandom():
     ''' Gets a proper 64 bits random number (ints in Python are not the ideal toy to play with int64)'''
@@ -118,6 +119,8 @@ class Board:
       self._nbBLACK = 0
       self._capturedWHITE = 0
       self._capturedBLACK = 0
+
+      self._nbMoves = 0
 
       self._nextPlayer = self._BLACK
       self._board = np.zeros((Board._BOARDSIZE**2), dtype='int8')
@@ -256,6 +259,8 @@ class Board:
                 self._lastPlayerHasPassed = True
             self._currentHash ^= self._passHash
 
+
+        self._nbMoves += 1
         self._seenHashes.add(self._currentHash)
         self._historyMoveNames.append(self.flat_to_name(fcoord))
         self._nextPlayer = Board.flip(self._nextPlayer)
@@ -571,10 +576,10 @@ class Board:
                         touched_whites += 1
             # here we have gathered all the informations about an empty area
             assert len(currentstring) == ssize
-            assert touched_blacks > 0 or touched_whites > 0
-            if touched_blacks == 0:
+            assert (self._nbBLACK == 0 and self._nbWHITE == 0) or touched_blacks > 0 or touched_whites > 0
+            if touched_blacks == 0 and touched_whites > 0:
                 only_whites += ssize
-            elif touched_whites == 0:
+            elif touched_whites == 0 and touched_blacks > 0:
                 only_blacks += ssize
             else:
                 others += ssize
@@ -758,3 +763,203 @@ class Board:
         return board
 
 
+    def get_nbMoves(self):
+      return self._nbMoves
+
+    # def MaxMinMove(self, depth=3):
+    #     if self._gameOver:
+    #         res = self.result() #White en premier, black en deuxième
+    #         if res == "1/2-1/2":
+    #             return 0
+    #         if (res == "1-0" and self._nextPlayer == Board._BLACK) or (res == "0-1" and self._nextPlayer == Board._WHITE):
+    #             return 100000
+    #         else:
+    #             return -100000
+
+    #     if depth == 0:
+    #         return self.evaluate() #TODO evaluate
+
+    #     best = None
+    #     move = None
+    #     for m in self.weak_legal_moves():
+    #         self.push(m)
+    #         nm = self.MinMax(depth-1)
+    #         if best == None or best < nm:
+    #             best = nm
+    #             move = m
+    #         self.pop()
+    #     return move, best
+
+
+    # def MaxMin(self, depth=3):
+    #     if self._gameOver:
+    #         res = self.result() #White en premier, black en deuxième
+    #         if res == "1/2-1/2":
+    #             return 0
+    #         if (res == "1-0" and self._nextPlayer == Board._BLACK) or (res == "0-1" and self._nextPlayer == Board._WHITE):
+    #             return 100000
+    #         else:
+    #             return -100000
+
+    #     if depth == 0:
+    #         return self.evaluate() #TODO evaluate
+
+    #     best = None
+    #     for m in self.weak_legal_moves():
+    #         self.push(m)
+    #         nm = self.MinMax(depth-1)
+    #         if best == None or best < nm:
+    #             best = nm
+    #         self.pop()
+    #     return best
+
+
+    # def MinMax(self, depth=3):
+    #     if self._gameOver:
+    #         res = self.result()
+    #         if res == "1/2-1/2":
+    #             return 0
+    #         if (res == "1-0" and self._nextPlayer == Board._WHITE) or (res == "0-1" and self._nextPlayer == Board._BLACK):
+    #             return 100000
+    #         else:
+    #             return -100000
+
+    #     if depth == 0:
+    #         return (self.evaluate_opponent())
+
+    #     worst = None
+    #     for m in self.weak_legal_moves():
+    #         self.push(m)
+    #         nm = self.MaxMin(depth-1)
+    #         if worst == None or min > nm:
+    #             worst = nm
+    #         self.pop()
+    #     return worst
+
+    def MaxMinABMove(self, moves, depth=3, alpha = None, beta = None):
+        #print(len(self._empties))
+        if self._gameOver:
+            res = self.result() #White en premier, black en deuxième
+            if res == "1/2-1/2":
+                return 0
+            if (res == "1-0" and self._nextPlayer == Board._WHITE) or (res == "0-1" and self._nextPlayer == Board._BLACK):
+                return 100000
+            else:
+                return -100000
+
+        if depth == 0:
+            return self.evaluate() #TODO evaluate
+
+        #Play the first moves according to JSON file
+        if (self._nbMoves < 10):
+          return self.play_first_moves(moves)
+
+
+        move = None
+        for m in moves:
+            self.push(m)
+
+            nm = self.MinMaxAB(depth-1, alpha, beta)
+            if alpha == None or alpha < nm:
+                alpha = nm
+                move = m
+            self.pop()
+            if beta != None and alpha >= beta:
+                return move#beta
+        return move#, alpha
+
+    def MaxMinAB(self, depth=3, alpha=None, beta=None):
+        #print(len(self._empties))
+        if self._gameOver:
+            res = self.result() #White en premier, black en deuxième
+            if res == "1/2-1/2":
+                return 0
+            if (res == "1-0" and self._nextPlayer == Board._WHITE) or (res == "0-1" and self._nextPlayer == Board._BLACK):
+                return 100000
+            else:
+                return -100000
+
+        if depth == 0:
+            return self.evaluate() #TODO evaluate
+
+        
+        for m in self.weak_legal_moves():
+        #for m in self.legal_moves():
+            if self.push(m):
+                nm = self.MinMaxAB(depth-1, alpha, beta)
+                if alpha == None or alpha < nm:
+                    alpha = nm
+                self.pop()
+                if beta != None and alpha >= beta:
+                    return beta
+        return alpha
+
+    def MinMaxAB(self, depth=3, alpha=None, beta=None):
+        #print(len(self._empties))
+        if self._gameOver:
+            res = self.result()
+            if res == "1/2-1/2":
+                return 0
+            if (res == "1-0" and self._nextPlayer == Board._BLACK) or (res == "0-1" and self._nextPlayer == Board._WHITE):
+                return 100000
+            else:
+                return -100000
+
+        if depth == 0:
+            return (self.evaluate_opponent())
+
+        for m in self.weak_legal_moves():
+        #for m in self.legal_moves():
+            if self.push(m):
+                nm = self.MaxMinAB(depth-1, alpha, beta)
+                if beta == None or beta > nm:
+                    beta = nm
+                self.pop()
+                if alpha != None and alpha >= beta:
+                    return alpha
+        return beta
+
+
+
+    def evaluate_opponent(self):
+        scores = self.compute_score()
+        return scores[2 - self._nextPlayer] - scores[self._nextPlayer - 1]
+
+        # if self._nextPlayer == Board._BLACK:
+        #     return scores[1]
+        # else:
+        #     return scores[0]
+
+    def evaluate(self):
+        scores = self.compute_score()
+        return scores[self._nextPlayer - 1] - scores[2 - self._nextPlayer]
+
+        # if self._nextPlayer == Board._BLACK:
+        #     return scores[0]
+        # else:
+        #     return scores[1]
+
+    def play_first_moves(self,moves):
+      with open('games.json') as json_file:
+        data = json.load(json_file)
+        #We first try to find a situation exactly similar. if not, we only consider the last moves, until we consider only the last move.
+        startLoop = 0
+        while startLoop <= self._nbMoves:
+          for p in data:
+            #we only consider games where our color won
+            if (p['winner'] == "W" and self._nextPlayer == 2) or (p['winner'] == "B" and self._nextPlayer == 1):
+              is_same = True
+              i = startLoop
+              #loop to test if the situations are the same
+              while i < self._nbMoves and is_same:
+                coord = Board.name_to_flat(p['moves'][i])
+                if not self._board[coord] == i%2 + 1:
+                  is_same = False
+                i+=1
+              #if we found same situation, then use move.
+              if is_same and Board.name_to_flat(p['moves'][self._nbMoves]) in moves:
+                return Board.name_to_flat(p['moves'][self._nbMoves])
+          startLoop += 1
+#compute_score -> (black, white)
+#_BLACK=1
+#_WHITE=2
