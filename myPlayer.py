@@ -7,6 +7,7 @@ Right now, this class contains the copy of the randomPlayer. But you have to cha
 
 import time
 import Goban 
+import random
 from random import choice
 from playerInterface import *
 
@@ -29,6 +30,7 @@ class myPlayer(PlayerInterface):
             print("Referee told me to play but the game is over!")
             return "PASS" 
         moves = self._board.legal_moves() # Dont use weak_legal_moves() here!
+        random.shuffle(moves)
         move = self._board.MaxMinABMove(moves,2)
         self._board.push(move)
 
